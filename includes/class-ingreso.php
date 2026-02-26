@@ -145,3 +145,34 @@ class GAA_Ingreso {
                 '_gaa_acepto' => isset($_POST['acepto']) ? 1 : 0,
                 '_gaa_token' => $token,
             ),
+        ));
+
+        // Redirigir al formulario con indicador de envío
+        if ($socio_id && !is_wp_error($socio_id)) {
+            $current = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : home_url('/');
+            wp_safe_redirect( add_query_arg('enviado', 'ok', $current) );
+            exit;
+        }
+    }
+
+    // Procesar validación (placeholder)
+    public static function procesar_validacion() {
+        return;
+    }
+
+    // Shortcode para validar email (placeholder)
+    public static function validar_email() {
+        return '';
+    }
+
+    // Meta boxes (placeholder)
+    public static function meta_boxes() {
+    }
+
+    // Guardar metadatos al guardar el post
+    public static function guardar_meta($post_id) {
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+        if (get_post_type($post_id) !== 'socio') return;
+    }
+
+}
