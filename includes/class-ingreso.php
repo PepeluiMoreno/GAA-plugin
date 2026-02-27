@@ -83,7 +83,7 @@ class GAA_Ingreso {
         $mp_tpl_id = get_option('gaa_mailpoet_alta_id', '');
         if ($use_mp_alta && !empty($mp_tpl_id) && class_exists('MailPoet\\API\\API')) {
             try {
-                $mp = \MailPoet\API\API::MP();
+                $mp = \GAA_Configuracion::get_mailpoet_api();
                 $tpl = null;
                 if (is_object($mp)) {
                     if (method_exists($mp, 'templates')) {

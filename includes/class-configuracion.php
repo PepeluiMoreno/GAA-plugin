@@ -10,6 +10,32 @@ class GAA_Configuracion {
         add_action('wp_ajax_gaa_fetch_mailpoet_template', array(__CLASS__, 'ajax_fetch_mailpoet_template'));
     }
 
+    // Obtener una instancia segura de la API de MailPoet (compatible con distintas firmas de MP())
+    public static function get_mailpoet_api() {
+        if (!class_exists('MailPoet\\API\\API')) return null;
+        try {
+            $rm = new ReflectionMethod('MailPoet\\API\\API', 'MP');
+            $req = $rm->getNumberOfRequiredParameters();
+            if ($req === 0) {
+                try { return \MailPoet\API\API::MP(); } catch (\Throwable $e) { /* continue */ }
+            }
+            // Intentar con parámetros comunes
+            $candidates = array('v1','v2','v3','default');
+            foreach ($candidates as $c) {
+                try {
+                    $inst = \MailPoet\API\API::MP($c);
+                    if (is_object($inst)) return $inst;
+                } catch (\Throwable $__e) { continue; }
+            }
+            // Intentar sin comprobación (último recurso)
+            try { return \MailPoet\API\API::MP('v1'); } catch (\Throwable $__e) { return null; }
+        } catch (\ReflectionException $e) {
+            try { return \MailPoet\API\API::MP('v1'); } catch (\Throwable $e2) { return null; }
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public static function ajax_fetch_mailpoet_template() {
         if (!current_user_can('manage_options')) wp_send_json_error(array('msg'=>'No autorizado'));
         if (empty($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'gaa_mailpoet_import')) wp_send_json_error(array('msg'=>'Nonce inválido'));
@@ -18,8 +44,8 @@ class GAA_Configuracion {
 
         // Intentar obtener HTML vía MailPoet API (varias interfaces posibles)
         try {
-            if (!class_exists('MailPoet\\API\\API')) wp_send_json_error(array('msg'=>'MailPoet no disponible'));
-            $mp = \MailPoet\API\API::MP();
+              if (!class_exists('MailPoet\\API\\API')) wp_send_json_error(array('msg'=>'MailPoet no disponible'));
+              $mp = self::get_mailpoet_api();
             $tpl = null;
             if (is_object($mp)) {
                 if (method_exists($mp,'templates')) {
@@ -221,37 +247,31 @@ class GAA_Configuracion {
             update_option('gaa_allowed_from_domains', implode("\n", $allowed_lines));
             echo '<div class="notice notice-success"><p>Configuracion guardada.</p></div>';
             // Intentar sincronizar remitente con MailPoet si está instalado
-            if (class_exists('MailPoet\\API\\API')) {
-                try {
-                    $mp = \MailPoet\API\API::MP();
-                    $synced = false;
-                    $tries = array('setFrom','setSender','setSenderAddress','updateSettings','setSettings','set_from');
-                    foreach ($tries as $m) {
-                        if (is_object($mp) && method_exists($mp, $m)) {
-                            try {
-                                // many APIs accept different signatures; try common ones
-                                if ($m === 'updateSettings' || $m === 'setSettings') {
-                                    $mp->{$m}(array('from_name' => $from_name, 'from_email' => $from_email));
-                                } else {
-                                    // try two-arg signature
-                                    $mp->{$m}($from_email, $from_name);
+                if (class_exists('MailPoet\\API\\API')) {
+                    try {
+                        $mp = self::get_mailpoet_api();
+                        $synced = false;
+                        if ($mp) {
+                            $tries = array('setFrom','setSender','setSenderAddress','updateSettings','setSettings','set_from');
+                            foreach ($tries as $m) {
+                                if (is_object($mp) && method_exists($mp, $m)) {
+                                    try {
+                                        if ($m === 'updateSettings' || $m === 'setSettings') {
+                                            $mp->{$m}(array('from_name' => $from_name, 'from_email' => $from_email));
+                                        } else {
+                                            $mp->{$m}($from_email, $from_name);
+                                        }
+                                        $synced = true; break;
+                                    } catch (\Throwable $__e) { continue; }
                                 }
-                                $synced = true;
-                                break;
-                            } catch (\Throwable $__e) {
-                                // ignore and try next
                             }
                         }
+                        if ($synced) echo '<div class="notice notice-success"><p>Remitente sincronizado con MailPoet.</p></div>';
+                        else echo '<div class="notice notice-warning"><p>No se ha podido sincronizar automáticamente con MailPoet. Por favor revisa la configuración en MailPoet.</p></div>';
+                    } catch (\Throwable $__err) {
+                        echo '<div class="notice notice-warning"><p>MailPoet detectado pero no se ha podido sincronizar el remitente: ' . esc_html($__err->getMessage()) . '</p></div>';
                     }
-                    if ($synced) {
-                        echo '<div class="notice notice-success"><p>Remitente sincronizado con MailPoet.</p></div>';
-                    } else {
-                        echo '<div class="notice notice-warning"><p>No se ha podido sincronizar automáticamente con MailPoet. Por favor revisa la configuración en MailPoet.</p></div>';
-                    }
-                } catch (\Throwable $__err) {
-                    echo '<div class="notice notice-warning"><p>MailPoet detectado pero no se ha podido sincronizar el remitente: ' . esc_html($__err->getMessage()) . '</p></div>';
                 }
-            }
                 
         }
         
@@ -515,28 +535,39 @@ class GAA_Configuracion {
                         <?php
                         // Preparar integración con MailPoet (si está disponible)
                         $mailpoet_templates = array();
-                        if (class_exists('MailPoet\API\API')) {
-                            try {
-                                $mp = \MailPoet\API\API::MP();
-                                $svc = null;
-                                if (is_object($mp) && method_exists($mp, 'templates')) $svc = $mp->templates();
-                                elseif (is_object($mp) && method_exists($mp, 'getTemplates')) $svc = $mp;
-                                if ($svc) {
-                                    if (method_exists($svc, 'getAll')) $items = $svc->getAll();
-                                    elseif (method_exists($svc, 'all')) $items = $svc->all();
-                                    else $items = array();
-                                    if (is_array($items)) {
-                                        foreach ($items as $it) {
-                                            $id = is_array($it) && isset($it['id']) ? $it['id'] : (is_object($it) && isset($it->id) ? $it->id : '');
-                                            $name = is_array($it) && isset($it['name']) ? $it['name'] : (is_object($it) && isset($it->name) ? $it->name : '');
-                                            if (!empty($id)) $mailpoet_templates[] = array('id' => $id, 'name' => $name);
+                                if (class_exists('MailPoet\\API\\API')) {
+                                    try {
+                                        $mp = self::get_mailpoet_api();
+                                        if ($mp) {
+                                            $svc = null;
+                                            if (is_object($mp) && method_exists($mp, 'templates')) $svc = $mp->templates();
+                                            elseif (is_object($mp) && method_exists($mp, 'getTemplates')) $svc = $mp;
+                                            $items = array();
+                                            if ($svc) {
+                                                if (method_exists($svc, 'getAll')) {
+                                                    $items = $svc->getAll();
+                                                } elseif (method_exists($svc, 'all')) {
+                                                    $items = $svc->all();
+                                                } elseif (method_exists($svc, 'findAll')) {
+                                                    $items = $svc->findAll();
+                                                }
+                                            } elseif (method_exists($mp, 'getTemplate') || method_exists($mp,'getTemplates')) {
+                                                // some versions expose templates differently: attempt to fetch recent posts of type mailpoet_template
+                                                $items = array();
+                                            }
+                                            if (is_object($items) && method_exists($items,'toArray')) $items = $items->toArray();
+                                            if (is_array($items)) {
+                                                foreach ($items as $it) {
+                                                    $id = is_array($it) && isset($it['id']) ? $it['id'] : (is_object($it) && isset($it->id) ? $it->id : '');
+                                                    $name = is_array($it) && isset($it['name']) ? $it['name'] : (is_object($it) && isset($it->name) ? $it->name : '');
+                                                    if (!empty($id)) $mailpoet_templates[] = array('id' => $id, 'name' => $name);
+                                                }
+                                            }
                                         }
+                                    } catch (\\Throwable $__mpterr) {
+                                        // ignore listing errors
                                     }
                                 }
-                            } catch (\Throwable $__mpterr) {
-                                // ignore listing errors
-                            }
-                        }
 
                         $selected_mp_insc = get_option('gaa_mailpoet_inscripcion_id','');
                         $use_mp_insc = get_option('gaa_use_mailpoet_inscripcion', 0);
