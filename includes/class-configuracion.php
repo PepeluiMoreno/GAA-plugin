@@ -477,7 +477,7 @@ class GAA_Configuracion {
                             <th>Mensaje de bienvenida - Cuerpo (HTML)</th>
                             <td>
                                 <?php
-                                $welcome_body = get_option('gaa_welcome_body', $welcome_message);
+                                $welcome_body = get_option('gaa_welcome_body', '<p>Bienvenido/a, gracias por unirte.</p>');
                                 wp_editor($welcome_body, 'gaa_welcome_body_editor', array(
                                     'textarea_name' => 'gaa_welcome_body',
                                     'textarea_rows' => 10,
@@ -564,7 +564,7 @@ class GAA_Configuracion {
                                                 }
                                             }
                                         }
-                                    } catch (\\Throwable $__mpterr) {
+                                    } catch (\Throwable $__mpterr) {
                                         // ignore listing errors
                                     }
                                 }
