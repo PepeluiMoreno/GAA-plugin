@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(docker exec wordpress-web-1 bash -c \"curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && php wp-cli.phar --info 2>&1 | head -5\")",
+      "Read(//home/jose/dev/wordpress/gutenberg-forms/admin/cpt/**)",
+      "Read(//home/jose/dev/wordpress/gutenberg-forms/triggers/**)",
+      "Read(//home/jose/dev/wordpress/gutenberg-forms/Utils/**)",
+      "Read(//home/jose/dev/wordpress/gutenberg-forms/controllers/forms/**)",
+      "Read(//home/jose/dev/wordpress/gutenberg-forms/**)",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\(''deps:'', list\\(p.get\\(''dependencies'',{}\\).keys\\(\\)\\)\\); print\\(''devdeps:'', list\\(p.get\\(''devDependencies'',{}\\).keys\\(\\)\\)[:10]\\)\")"
+    ],
+    "additionalDirectories": [
+      "/home/jose/dev/wordpress/wp-symfony-forms/src/Form"
+    ]
+  }
+}
